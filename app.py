@@ -254,9 +254,9 @@ class AnalisisAstrologicoWeb:
         fortuna = asc + luna_lon - sol_lon
         return self.normalizar_grados(fortuna)
 
-    # NUEVO: Función para generar PDF (tomada de analisis_astrologico_interfaz.py)
+    # FUNCIÓN PDF COMPLETAMENTE MEJORADA
     def generar_pdf_completo(self, resultado, events, consultante_nombre):
-        """Genera un PDF completo con todos los resultados"""
+        """Genera un PDF completo con todos los resultados (VERSIÓN MEJORADA)"""
         try:
             buffer = io.BytesIO()
             
@@ -271,57 +271,180 @@ class AnalisisAstrologicoWeb:
             doc = SimpleDocTemplate(buffer, pagesize=letter)
             story = []
 
-            # Título principal
-            story.append(Paragraph(f"Análisis Astrológico Completo - {consultante_nombre}", styles["CustomTitle"]))
+            # Título principal (como en la versión desktop)
+            story.append(Paragraph(f"Análisis Astrológico Completo - {consultante_nombre} (Coordenadas GMS Corregidas)", styles["CustomTitle"]))
             story.append(Spacer(1,12))
 
-            # Información personal
+            # Información personal COMPLETA (como en desktop)
             story.append(Paragraph("<b>INFORMACIÓN DEL NACIMIENTO:</b>", styles["BodyBold"]))
             story.append(Spacer(1,6))
 
             info_lines = [
+                f"<b>Consultante:</b> {consultante_nombre}",
                 f"<b>Fecha:</b> {resultado['fecha_nacimiento']}",
                 f"<b>Hora local:</b> {resultado['hora_local']}",
-                f"<b>Zona horaria:</b> {resultado['zona_horaria']:+}",
-                f"<b>Latitud:</b> {resultado['latitud']:.6f}°",
-                f"<b>Longitud:</b> {resultado['longitud']:.6f}°",
+                f"<b>Zona horaria:</b> UTC{resultado['zona_horaria']:+.1f}",
+                f"<b>Latitud GMS:</b> {resultado['latitud_gms'][0]}°{resultado['latitud_gms'][1]}'{resultado['latitud_gms'][2]}\" {resultado['latitud_gms'][3]}",
+                f"<b>Longitud GMS:</b> {resultado['longitud_gms'][0]}°{resultado['longitud_gms'][1]}'{resultado['longitud_gms'][2]}\" {resultado['longitud_gms'][3]}",
+                f"<b>Coordenadas decimales:</b> Lat {resultado['latitud']:.6f}°, Long {resultado['longitud']:.6f}°",
                 f"<b>Genitura:</b> {'DIURNA' if resultado['is_diurnal'] else 'NOCTURNA'}",
-                f"<b>Hyleg:</b> {resultado['hyleg_point']}",
-                f"<b>Alcocoden:</b> {resultado['alcocoden_point']}",
-                f"<b>Años potenciales:</b> {resultado['anios_alcocoden']} años"
+                f"<b>Hyleg:</b> {resultado['hyleg_point']} - {resultado['hyleg_mensaje']}",
+                f"<b>Alcocoden:</b> {resultado['alcocoden_point']} - {resultado['alcocoden_mensaje']}",
+                f"<b>Años potenciales:</b> {resultado['anios_alcocoden']} años - {resultado['mensaje_anios']}"
             ]
 
             for line in info_lines:
                 story.append(Paragraph(line, styles["Body"]))
             story.append(Spacer(1,12))
 
-            # Estado de combustión
-            story.append(Paragraph("<b>ESTADO DE COMBUSTIÓN:</b>", styles["BodyBold"]))
+            # Estado de combustión COMPLETO (como en desktop)
+            story.append(Paragraph("<b>ESTADO DE COMBUSTIÓN DE LOS PLANETAS:</b>", styles["BodyBold"]))
             story.append(Spacer(1,6))
 
-            combustion_data = [["Planeta", "Longitud", "Signo", "Casa", "Estado"]]
-            for planeta, longitud in resultado['natal_pos'].items():
-                signo = self.obtener_signo(longitud)
-                casa = self.obtener_casa(longitud, resultado['houses'])
-                estado, separacion = self.obtener_estado_combustion(planeta, longitud, resultado['natal_pos']["Sun"])
-                combustion_data.append([planeta, f"{longitud:.2f}°", signo, casa, estado])
+            combustion_data = [["Planeta", "Longitud", "Signo", "Casa", "Estado", "Separación Sol"]]
+            for planeta in ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn"]:
+                if planeta in resultado['natal_pos']:
+                    estado, separacion = self.obtener_estado_combustion(planeta, resultado['natal_pos'][planeta], resultado['natal_pos']["Sun"])
+                    signo = self.obtener_signo(resultado['natal_pos'][planeta])
+                    casa = self.obtener_casa(resultado['natal_pos'][planeta], resultado['houses'])
+                    combustion_data.append([
+                        planeta, 
+                        f"{resultado['natal_pos'][planeta]:.2f}°", 
+                        signo, 
+                        str(casa),
+                        estado, 
+                        f"{separacion:.2f}°" if planeta != "Sun" else "N/A"
+                    ])
 
             tbl = Table(combustion_data, hAlign='LEFT')
             story.append(tbl)
             story.append(Spacer(1,12))
 
-            # Eventos principales
-            story.append(Paragraph("<b>PRÓXIMOS EVENTOS PRINCIPALES:</b>", styles["BodyBold"]))
+            # Puntos principales COMPLETOS (como en desktop)
+            story.append(Paragraph("<b>PUNTOS PRINCIPALES:</b>", styles["BodyBold"]))
             story.append(Spacer(1,6))
 
-            events_data = [["Año", "Punto", "Aspecto", "Planeta", "Precisión"]]
-            for e in events[:50]:  # Mostrar solo los primeros 50 eventos
-                events_data.append([str(e["year"]), e["point"], e["aspect"], e["target"], f"{e['sep']:.3f}°"])
+            points_data = [["Punto", "Longitud", "Signo", "Casa"]]
+            for punto, longitud in resultado['points'].items():
+                signo = self.obtener_signo(longitud)
+                casa = self.obtener_casa(longitud, resultado['houses'])
+                points_data.append([punto, f"{longitud:.2f}°", signo, str(casa)])
 
+            tbl_points = Table(points_data, hAlign='LEFT')
+            story.append(tbl_points)
+            story.append(Spacer(1,12))
+
+            # Posiciones planetarias COMPLETAS (como en desktop)
+            story.append(Paragraph("<b>POSICIONES PLANETARIAS NATALES:</b>", styles["BodyBold"]))
+            story.append(Spacer(1,6))
+
+            planets_data = [["Planeta", "Longitud", "Signo", "Casa", "Estado Combustión"]]
+            for planeta, longitud in resultado['natal_pos'].items():
+                signo = self.obtener_signo(longitud)
+                casa = self.obtener_casa(longitud, resultado['houses'])
+                estado, separacion = self.obtener_estado_combustion(planeta, longitud, resultado['natal_pos']["Sun"])
+                planets_data.append([planeta, f"{longitud:.2f}°", signo, str(casa), estado])
+
+            tbl_planets = Table(planets_data, hAlign='LEFT', repeatRows=1)
+            story.append(tbl_planets)
+            story.append(Spacer(1,12))
+
+            # EVENTOS PRINCIPALES HASTA 100 AÑOS (como en desktop)
+            story.append(Paragraph("<b>PRÓXIMOS EVENTOS PRINCIPALES (hasta 100 años):</b>", styles["BodyBold"]))
+            story.append(Spacer(1,6))
+
+            # Filtrar eventos hasta 100 años y ordenar por importancia
+            priority_aspects = ["Opposition", "Square", "Conjunction", "Trine", "Sextile"]
+            events_hasta_100 = [e for e in events if e['year'] <= 100 and e['aspect'] in priority_aspects]
+
+            # Ordenar por año y por importancia del aspecto
+            def aspect_priority(aspect_name):
+                priority_order = {"Opposition": 1, "Square": 2, "Conjunction": 3, "Trine": 4, "Sextile": 5}
+                return priority_order.get(aspect_name, 6)
+
+            events_sorted = sorted(events_hasta_100, key=lambda x: (x['year'], aspect_priority(x['aspect'])))
+
+            events_data = [["Año", "Edad", "Punto", "Aspecto", "Planeta", "Precisión"]]
+            for e in events_sorted[:100]:  # Limitar a 100 eventos para no hacer el PDF muy grande
+                edad_aproximada = int(resultado['fecha_nacimiento'][:4]) + e['year']
+                events_data.append([
+                    str(e['year']),
+                    str(edad_aproximada),
+                    e['point'],
+                    e['aspect'],
+                    e['target'],
+                    f"{e['sep']:.3f}°"
+                ])
+
+            # Crear tabla con eventos
             tbl_events = Table(events_data, hAlign='LEFT', repeatRows=1)
             story.append(tbl_events)
             story.append(Spacer(1,12))
 
+            # INTERPRETACIÓN POR BIENIOS (como en desktop)
+            story.append(Paragraph("<b>INTERPRETACIÓN POR BIENIOS (períodos de 2 años):</b>", styles["BodyBold"]))
+            story.append(Spacer(1,8))
+            
+            # Análisis basado en los años del Alcocoden
+            story.append(Paragraph(f"<b>Período crítico primario:</b> {resultado['anios_alcocoden']} años (alrededor del año {int(resultado['fecha_nacimiento'][:4]) + resultado['anios_alcocoden']})", styles["Body"]))
+            story.append(Paragraph(f"<b>Estado del Alcocoden:</b> {resultado['mensaje_anios']}", styles["Body"]))
+            story.append(Spacer(1,8))
+            
+            # Agrupar eventos por bienios (períodos de 2 años)
+            bienios = defaultdict(list)
+            for e in events:
+                if e['year'] <= 100:  # Solo hasta 100 años
+                    bienio = (e["year"] // 2) * 2  # Agrupar en períodos de 2 años
+                    bienios[bienio].append(e)
+
+            # Procesar cada bienio
+            for bienio in sorted(bienios.keys()):
+                bucket = bienios[bienio]
+                
+                # Contar tipos de aspectos
+                tensions = [x for x in bucket if x["aspect"] in ("Opposition", "Square")]
+                harmonies = [x for x in bucket if x["aspect"] in ("Trine", "Sextile")]
+                conjs = [x for x in bucket if x["aspect"] == "Conjunction"]
+                
+                # Solo mostrar bienios con eventos significativos
+                if tensions or harmonies or conjs:
+                    # Crear descripciones únicas para cada tipo de aspecto
+                    tension_set = set()
+                    harmony_set = set()
+                    conj_set = set()
+                    
+                    for t in tensions:
+                        tension_set.add(f"{t['point']}→{t['target']}")
+                    for h in harmonies:
+                        harmony_set.add(f"{h['point']}→{h['target']}")
+                    for c in conjs:
+                        conj_set.add(f"{c['point']}→{c['target']}")
+                    
+                    # Construir el texto del bienio
+                    bienio_text = f"<b>Bienio {bienio}-{bienio+1}:</b> "
+                    parts = []
+                    
+                    if tensions:
+                        parts.append(f"{len(tensions)} tensos ({', '.join(sorted(tension_set))})")
+                    if harmonies:
+                        parts.append(f"{len(harmonies)} armónicos ({', '.join(sorted(harmony_set))})")
+                    if conjs:
+                        parts.append(f"{len(conjs)} conjunciones ({', '.join(sorted(conj_set))})")
+                    
+                    bienio_text += "; ".join(parts)
+                    story.append(Paragraph(bienio_text, styles["Body"]))
+                    story.append(Spacer(1,4))
+
+            # Nota final COMPLETA (como en desktop)
+            story.append(Spacer(1,12))
+            story.append(Paragraph("<b>NOTA IMPORTANTE:</b>", styles["BodyBold"]))
+            story.append(Paragraph("Este análisis se basa en las direcciones primarias (1° = 1 año) y el cálculo tradicional de Hyleg y Alcocoden según Ben Ragel.", styles["Body"]))
+            story.append(Paragraph("La Parte de la Fortuna se calcula con la fórmula tradicional corregida: Ascendente + Luna - Sol", styles["Body"]))
+            story.append(Paragraph("Coordenadas en formato GMS (Grados, Minutos, Segundos) convertidas a grados decimales para cálculos.", styles["Body"]))
+            story.append(Paragraph("<b>VERSIÓN CORREGIDA:</b> Se ha verificado la conversión de coordenadas GMS a GD.", styles["Body"]))
+            story.append(Paragraph("Los años potenciales indican períodos críticos, no fechas exactas de eventos.", styles["Body"]))
+
+            # Construir el PDF
             doc.build(story)
             pdf_bytes = buffer.getvalue()
             buffer.close()
@@ -332,7 +455,7 @@ class AnalisisAstrologicoWeb:
             st.error(f"Error al generar PDF: {str(e)}")
             return None
 
-    # NUEVO: Función para generar CSV detallado
+    # Función para generar CSV detallado
     def generar_csv_detallado(self, events, consultante_nombre):
         """Genera un CSV detallado con todos los eventos"""
         output = io.StringIO()
@@ -448,7 +571,7 @@ class AnalisisAstrologicoWeb:
             # Crear gráfico
             fig = self.crear_grafico_tiempo(events, consultante_nombre)
             
-            # NUEVO: Generar PDF y CSV
+            # Generar PDF y CSV
             pdf_bytes = self.generar_pdf_completo({
                 'fecha_nacimiento': fecha_nacimiento,
                 'hora_local': hora_local,
@@ -457,13 +580,18 @@ class AnalisisAstrologicoWeb:
                 'longitud': longitud,
                 'is_diurnal': is_diurnal,
                 'hyleg_point': hyleg_point,
+                'hyleg_mensaje': hyleg_mensaje,
                 'alcocoden_point': alcocoden_point,
+                'alcocoden_mensaje': alcocoden_mensaje,
                 'anios_alcocoden': anios_alcocoden,
+                'mensaje_anios': mensaje_anios,
                 'natal_pos': natal_pos,
                 'houses': houses,
                 'asc': asc,
                 'part_fort': part_fort,
-                'points': points
+                'points': points,
+                'latitud_gms': latitud_gms,
+                'longitud_gms': longitud_gms
             }, events, consultante_nombre)
             
             csv_content = self.generar_csv_detallado(events, consultante_nombre)
@@ -492,8 +620,8 @@ class AnalisisAstrologicoWeb:
                 'points': points,
                 'events': events,
                 'figura': fig,
-                'pdf_bytes': pdf_bytes,  # NUEVO
-                'csv_content': csv_content  # NUEVO
+                'pdf_bytes': pdf_bytes,
+                'csv_content': csv_content
             }
             
         except Exception as e:
@@ -697,6 +825,7 @@ def mostrar_resultados(resultado):
                 mime="application/pdf",
                 use_container_width=True
             )
+            st.info("✅ PDF incluye: Información completa, tablas detalladas, eventos hasta 100 años, interpretación por bienios")
         else:
             st.warning("PDF no disponible")
     
@@ -710,6 +839,7 @@ def mostrar_resultados(resultado):
                 mime="text/csv",
                 use_container_width=True
             )
+            st.info("✅ CSV incluye: Todos los eventos astrológicos con años, fechas y precisiones")
         else:
             st.warning("CSV no disponible")
     
@@ -721,7 +851,8 @@ def mostrar_resultados(resultado):
         - **Direcciones primarias**: Técnica predictiva donde 1° = 1 año
         - Los años potenciales indican períodos críticos, no fechas exactas
         - Este análisis se basa en la tradición de Ben Ragel
-        - **NUEVO**: Ahora incluye generación de PDF y CSV completos
+        - **NUEVO**: PDF completo incluye toda la información de la versión desktop
+        - **Incluye**: Tablas detalladas, interpretación por bienios, eventos hasta 100 años
         """)
 
 if __name__ == "__main__":
