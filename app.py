@@ -9,6 +9,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Image, Spacer, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 import base64
 import tempfile
+import io
 
 # ----------------------------- FUNCIONES DE CONVERSIÓN COORDENADAS -----------------------------
 def gms_a_gd(grados, minutos, segundos, direccion):
@@ -35,7 +36,7 @@ def gd_a_gms(grados_decimal):
     
     return abs(grados), minutos, segundos, direccion
 
-# ----------------------------- CLASE DE ANÁLISIS ASTROLÓGICO -----------------------------
+# ----------------------------- CLASE DE ANÁLISIS ASTROLÓGICO MEJORADA -----------------------------
 class AnalisisAstrologicoWeb:
     def __init__(self):
         self.MAX_YEARS = 120
@@ -253,6 +254,94 @@ class AnalisisAstrologicoWeb:
         fortuna = asc + luna_lon - sol_lon
         return self.normalizar_grados(fortuna)
 
+    # NUEVO: Función para generar PDF (tomada de analisis_astrologico_interfaz.py)
+    def generar_pdf_completo(self, resultado, events, consultante_nombre):
+        """Genera un PDF completo con todos los resultados"""
+        try:
+            buffer = io.BytesIO()
+            
+            styles = getSampleStyleSheet()
+            if "CustomTitle" not in styles:
+                styles.add(ParagraphStyle(name="CustomTitle", fontSize=18, leading=22, alignment=1))
+            styles.add(ParagraphStyle(name="Body", fontSize=10, leading=14, alignment=4))
+            styles.add(ParagraphStyle(name="BodyBold", parent=styles["Body"], fontName="Helvetica-Bold"))
+            styles.add(ParagraphStyle(name="Center", parent=styles["Body"], alignment=1))
+            styles.add(ParagraphStyle(name="Small", parent=styles["Body"], fontSize=8, leading=10))
+
+            doc = SimpleDocTemplate(buffer, pagesize=letter)
+            story = []
+
+            # Título principal
+            story.append(Paragraph(f"Análisis Astrológico Completo - {consultante_nombre}", styles["CustomTitle"]))
+            story.append(Spacer(1,12))
+
+            # Información personal
+            story.append(Paragraph("<b>INFORMACIÓN DEL NACIMIENTO:</b>", styles["BodyBold"]))
+            story.append(Spacer(1,6))
+
+            info_lines = [
+                f"<b>Fecha:</b> {resultado['fecha_nacimiento']}",
+                f"<b>Hora local:</b> {resultado['hora_local']}",
+                f"<b>Zona horaria:</b> {resultado['zona_horaria']:+}",
+                f"<b>Latitud:</b> {resultado['latitud']:.6f}°",
+                f"<b>Longitud:</b> {resultado['longitud']:.6f}°",
+                f"<b>Genitura:</b> {'DIURNA' if resultado['is_diurnal'] else 'NOCTURNA'}",
+                f"<b>Hyleg:</b> {resultado['hyleg_point']}",
+                f"<b>Alcocoden:</b> {resultado['alcocoden_point']}",
+                f"<b>Años potenciales:</b> {resultado['anios_alcocoden']} años"
+            ]
+
+            for line in info_lines:
+                story.append(Paragraph(line, styles["Body"]))
+            story.append(Spacer(1,12))
+
+            # Estado de combustión
+            story.append(Paragraph("<b>ESTADO DE COMBUSTIÓN:</b>", styles["BodyBold"]))
+            story.append(Spacer(1,6))
+
+            combustion_data = [["Planeta", "Longitud", "Signo", "Casa", "Estado"]]
+            for planeta, longitud in resultado['natal_pos'].items():
+                signo = self.obtener_signo(longitud)
+                casa = self.obtener_casa(longitud, resultado['houses'])
+                estado, separacion = self.obtener_estado_combustion(planeta, longitud, resultado['natal_pos']["Sun"])
+                combustion_data.append([planeta, f"{longitud:.2f}°", signo, casa, estado])
+
+            tbl = Table(combustion_data, hAlign='LEFT')
+            story.append(tbl)
+            story.append(Spacer(1,12))
+
+            # Eventos principales
+            story.append(Paragraph("<b>PRÓXIMOS EVENTOS PRINCIPALES:</b>", styles["BodyBold"]))
+            story.append(Spacer(1,6))
+
+            events_data = [["Año", "Punto", "Aspecto", "Planeta", "Precisión"]]
+            for e in events[:50]:  # Mostrar solo los primeros 50 eventos
+                events_data.append([str(e["year"]), e["point"], e["aspect"], e["target"], f"{e['sep']:.3f}°"])
+
+            tbl_events = Table(events_data, hAlign='LEFT', repeatRows=1)
+            story.append(tbl_events)
+            story.append(Spacer(1,12))
+
+            doc.build(story)
+            pdf_bytes = buffer.getvalue()
+            buffer.close()
+            
+            return pdf_bytes
+            
+        except Exception as e:
+            st.error(f"Error al generar PDF: {str(e)}")
+            return None
+
+    # NUEVO: Función para generar CSV detallado
+    def generar_csv_detallado(self, events, consultante_nombre):
+        """Genera un CSV detallado con todos los eventos"""
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Año", "Fecha simbólica", "Punto dirigido", "Aspecto", "Planeta natal", "Separación (°)"])
+        for e in events:
+            writer.writerow([e["year"], e["date"], e["point"], e["aspect"], e["target"], e["sep"]])
+        return output.getvalue()
+
     def realizar_analisis_completo(self, fecha_nacimiento, hora_local, zona_horaria, 
                                  consultante_nombre, latitud_gms, longitud_gms):
         try:
@@ -359,6 +448,26 @@ class AnalisisAstrologicoWeb:
             # Crear gráfico
             fig = self.crear_grafico_tiempo(events, consultante_nombre)
             
+            # NUEVO: Generar PDF y CSV
+            pdf_bytes = self.generar_pdf_completo({
+                'fecha_nacimiento': fecha_nacimiento,
+                'hora_local': hora_local,
+                'zona_horaria': zona_horaria,
+                'latitud': latitud,
+                'longitud': longitud,
+                'is_diurnal': is_diurnal,
+                'hyleg_point': hyleg_point,
+                'alcocoden_point': alcocoden_point,
+                'anios_alcocoden': anios_alcocoden,
+                'natal_pos': natal_pos,
+                'houses': houses,
+                'asc': asc,
+                'part_fort': part_fort,
+                'points': points
+            }, events, consultante_nombre)
+            
+            csv_content = self.generar_csv_detallado(events, consultante_nombre)
+            
             return {
                 'success': True,
                 'consultante_nombre': consultante_nombre,
@@ -382,7 +491,9 @@ class AnalisisAstrologicoWeb:
                 'part_fort': part_fort,
                 'points': points,
                 'events': events,
-                'figura': fig
+                'figura': fig,
+                'pdf_bytes': pdf_bytes,  # NUEVO
+                'csv_content': csv_content  # NUEVO
             }
             
         except Exception as e:
@@ -427,7 +538,7 @@ class AnalisisAstrologicoWeb:
         plt.tight_layout()
         return fig
 
-# ----------------------------- INTERFAZ STREAMLIT -----------------------------
+# ----------------------------- INTERFAZ STREAMLIT MEJORADA -----------------------------
 
 def main():
     st.set_page_config(
@@ -571,20 +682,36 @@ def mostrar_resultados(resultado):
     else:
         st.info("No hay eventos significativos en los próximos 30 años")
     
-    # Descargas
-    st.header("📥 Descargar Resultados")
+    # NUEVA SECCIÓN: Descargas mejoradas
+    st.header("📥 Descargar Resultados Completos")
     
-    # Generar CSV temporal
-    csv_data = "Año,Fecha,Punto,Aspecto,Planeta,Separación\n"
-    for e in resultado['events']:
-        csv_data += f"{e['year']},{e['date']},{e['point']},{e['aspect']},{e['target']},{e['sep']}\n"
+    col1, col2 = st.columns(2)
     
-    st.download_button(
-        label="📊 Descargar CSV con eventos",
-        data=csv_data,
-        file_name=f"eventos_astrologicos_{resultado['consultante_nombre']}.csv",
-        mime="text/csv"
-    )
+    with col1:
+        # Descargar PDF
+        if resultado.get('pdf_bytes'):
+            st.download_button(
+                label="📄 Descargar PDF Completo",
+                data=resultado['pdf_bytes'],
+                file_name=f"analisis_astrologico_{resultado['consultante_nombre']}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        else:
+            st.warning("PDF no disponible")
+    
+    with col2:
+        # Descargar CSV detallado
+        if resultado.get('csv_content'):
+            st.download_button(
+                label="📊 Descargar CSV Detallado",
+                data=resultado['csv_content'],
+                file_name=f"eventos_astrologicos_{resultado['consultante_nombre']}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        else:
+            st.warning("CSV no disponible")
     
     # Información adicional
     with st.expander("📖 Notas importantes"):
@@ -594,6 +721,7 @@ def mostrar_resultados(resultado):
         - **Direcciones primarias**: Técnica predictiva donde 1° = 1 año
         - Los años potenciales indican períodos críticos, no fechas exactas
         - Este análisis se basa en la tradición de Ben Ragel
+        - **NUEVO**: Ahora incluye generación de PDF y CSV completos
         """)
 
 if __name__ == "__main__":
