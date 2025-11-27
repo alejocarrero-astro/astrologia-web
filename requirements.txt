@@ -1,7 +1,7 @@
-"Fix dependencies for Python 3.13 compatibility"
 streamlit==1.28.0
 pyswisseph==2.10.3.2
 matplotlib==3.8.0
 reportlab==4.0.4
 pandas==2.1.0
 numpy==1.26.0
+
