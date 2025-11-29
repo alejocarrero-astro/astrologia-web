@@ -299,13 +299,14 @@ class AnalisisAstrologicoWeb:
                 story.append(Paragraph(line, styles["Body"]))
             story.append(Spacer(1,12))
 
-            # GRÁFICO DE CARTA NATAL (NUEVO) - Solo si hay datos de carta natal
+            # GRÁFICO DE CARTA NATAL - Solo si hay datos de carta natal
             if carta_data is not None:
                 story.append(Paragraph("<b>CARTA NATAL - GRÁFICO:</b>", styles["BodyBold"]))
                 story.append(Spacer(1,6))
                 
                 # Generar gráfico de carta natal
-                fig = self.generar_grafico_carta_natal(carta_data, consultante_nombre)
+                carta_natal = CartaNatalIntegrada()
+                fig = carta_natal.generar_grafico_carta_natal_completo(carta_data, consultante_nombre)
                 if fig is not None:
                     # Guardar figura en buffer
                     img_buffer = io.BytesIO()
@@ -313,7 +314,7 @@ class AnalisisAstrologicoWeb:
                     img_buffer.seek(0)
                     
                     # Agregar imagen al PDF
-                    img = Image(img_buffer, width=400, height=300)
+                    img = Image(img_buffer, width=400, height=400)
                     story.append(img)
                     story.append(Spacer(1,12))
                 
@@ -484,123 +485,6 @@ class AnalisisAstrologicoWeb:
         except Exception as e:
             st.error(f"Error al generar PDF: {str(e)}")
             return None
-
-    def generar_grafico_carta_natal(self, carta_data, consultante_nombre):
-        """Genera un gráfico de carta natal circular"""
-        try:
-            fig, ax = plt.subplots(figsize=(12, 12))
-            
-            # Crear un gráfico circular
-            ax.set_xlim(-1.2, 1.2)
-            ax.set_ylim(-1.2, 1.2)
-            ax.set_aspect('equal')
-            ax.axis('off')
-            
-            # Dibujar círculo exterior
-            circle_outer = plt.Circle((0, 0), 1.0, fill=False, edgecolor='black', linewidth=2)
-            ax.add_patch(circle_outer)
-            
-            # Dibujar círculos interiores
-            for radius in [0.8, 0.6, 0.4]:
-                circle = plt.Circle((0, 0), radius, fill=False, edgecolor='gray', linewidth=1, alpha=0.5)
-                ax.add_patch(circle)
-            
-            # Dividir en 12 signos
-            signos = ['Aries', 'Tauro', 'Géminis', 'Cáncer', 'Leo', 'Virgo',
-                     'Libra', 'Escorpio', 'Sagitario', 'Capricornio', 'Acuario', 'Piscis']
-            
-            signo_colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD',
-                           '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA']
-            
-            # Dibujar divisiones de signos
-            for i, signo in enumerate(signos):
-                angle = i * 30
-                rad_angle = np.radians(angle)
-                
-                # Línea divisoria
-                x_end = np.cos(rad_angle)
-                y_end = np.sin(rad_angle)
-                ax.plot([0.8*x_end, 1.0*x_end], [0.8*y_end, 1.0*y_end], 'k-', linewidth=1)
-                
-                # Nombre del signo
-                text_angle = angle - 15
-                if text_angle < 0:
-                    text_angle += 360
-                rad_text_angle = np.radians(text_angle)
-                text_x = 1.1 * np.cos(rad_text_angle)
-                text_y = 1.1 * np.sin(rad_text_angle)
-                
-                ax.text(text_x, text_y, signo, ha='center', va='center', 
-                       fontsize=9, rotation=angle-90, 
-                       bbox=dict(boxstyle="round,pad=0.3", facecolor=signo_colors[i], alpha=0.7))
-            
-            # Posicionar planetas
-            planet_positions = {}
-            for planeta, info in carta_data.items():
-                if planeta not in ['ascendente', 'parte_fortuna', 'casas', 'aspectos']:
-                    longitud = info['longitud']
-                    # Convertir longitud a posición en el círculo
-                    angle = np.radians(longitud)
-                    radius = 0.7  # Radio para planetas
-                    
-                    x = radius * np.cos(angle)
-                    y = radius * np.sin(angle)
-                    
-                    planet_positions[planeta] = (x, y)
-                    
-                    # Dibujar planeta
-                    color = self._get_planet_color(planeta)
-                    ax.plot(x, y, 'o', markersize=10, color=color, markeredgecolor='black')
-                    ax.text(x, y-0.05, planeta, ha='center', va='top', fontsize=8, 
-                           bbox=dict(boxstyle="round,pad=0.2", facecolor='white', alpha=0.8))
-            
-            # Dibujar aspectos
-            aspectos = carta_data.get('aspectos', [])
-            for aspecto in aspectos:
-                planeta1 = aspecto['planeta1']
-                planeta2 = aspecto['planeta2']
-                
-                if planeta1 in planet_positions and planeta2 in planet_positions:
-                    x1, y1 = planet_positions[planeta1]
-                    x2, y2 = planet_positions[planeta2]
-                    
-                    color = aspecto.get('color', '#333333')
-                    ax.plot([x1, x2], [y1, y2], '--', color=color, alpha=0.7, linewidth=1)
-            
-            # Título
-            ax.set_title(f'Carta Natal - {consultante_nombre}\n', fontsize=16, fontweight='bold')
-            
-            # Leyenda
-            legend_elements = []
-            for planeta in planet_positions.keys():
-                color = self._get_planet_color(planeta)
-                legend_elements.append(plt.Line2D([0], [0], marker='o', color='w', 
-                                                markerfacecolor=color, markersize=8, label=planeta))
-            
-            ax.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(-0.5, 1.0))
-            
-            plt.tight_layout()
-            return fig
-            
-        except Exception as e:
-            st.error(f"Error al generar gráfico de carta natal: {e}")
-            return None
-
-    def _get_planet_color(self, planeta):
-        """Devuelve colores específicos para cada planeta"""
-        colors = {
-            'Sun': '#FFD700',    # Dorado
-            'Moon': '#C0C0C0',   # Plateado
-            'Mercury': '#87CEEB', # Azul claro
-            'Venus': '#FFB6C1',  # Rosa claro
-            'Mars': '#FF4500',   # Rojo anaranjado
-            'Jupiter': '#FFA500', # Naranja
-            'Saturn': '#A9A9A9', # Gris oscuro
-            'Uranus': '#40E0D0', # Turquesa
-            'Neptune': '#1E90FF', # Azul dodger
-            'Pluto': '#8B008B'   # Magenta oscuro
-        }
-        return colors.get(planeta, '#333333')
 
     # Función para generar CSV detallado
     def generar_csv_detallado(self, events, consultante_nombre):
@@ -786,15 +670,310 @@ class AnalisisAstrologicoWeb:
         plt.tight_layout()
         return fig
 
-# ----------------------------- CARTA NATAL INTEGRADA (SOLO pyswisseph) -----------------------------
+# ----------------------------- CARTA NATAL MEJORADA CON GRÁFICO COMPLETO -----------------------------
 
 class CartaNatalIntegrada:
     def __init__(self):
         self.analizador_web = AnalisisAstrologicoWeb()
     
+    def generar_grafico_carta_natal_completo(self, carta_data, consultante_nombre):
+        """Genera un gráfico completo de carta natal con casas, aspectos y puntos importantes"""
+        try:
+            fig, ax = plt.subplots(figsize=(14, 14))
+            
+            # Configuración del gráfico
+            ax.set_xlim(-1.3, 1.3)
+            ax.set_ylim(-1.3, 1.3)
+            ax.set_aspect('equal')
+            ax.axis('off')
+            
+            # Dibujar círculos concéntricos
+            self._dibujar_circulos_concentricos(ax)
+            
+            # Dibujar divisiones de casas
+            self._dibujar_casas(ax, carta_data)
+            
+            # Dibujar signos zodiacales
+            self._dibujar_signos_zodiaco(ax)
+            
+            # Dibujar planetas
+            posiciones_planetas = self._dibujar_planetas(ax, carta_data)
+            
+            # Dibujar aspectos
+            self._dibujar_aspectos(ax, posiciones_planetas, carta_data)
+            
+            # Dibujar puntos importantes (Ascendente, MC, etc.)
+            self._dibujar_puntos_importantes(ax, carta_data)
+            
+            # Título y leyenda
+            self._agregar_titulo_leyenda(ax, consultante_nombre)
+            
+            plt.tight_layout()
+            return fig
+            
+        except Exception as e:
+            st.error(f"Error al generar gráfico completo de carta natal: {e}")
+            return None
+
+    def _dibujar_circulos_concentricos(self, ax):
+        """Dibuja los círculos concéntricos del gráfico"""
+        # Círculo exterior
+        circle_outer = plt.Circle((0, 0), 1.0, fill=False, edgecolor='black', linewidth=3)
+        ax.add_patch(circle_outer)
+        
+        # Círculos interiores
+        for radius in [0.8, 0.6, 0.4, 0.2]:
+            circle = plt.Circle((0, 0), radius, fill=False, edgecolor='gray', 
+                              linewidth=1, alpha=0.5, linestyle='--')
+            ax.add_patch(circle)
+
+    def _dibujar_casas(self, ax, carta_data):
+        """Dibuja las divisiones de las casas astrológicas"""
+        try:
+            casas = carta_data.get('casas', {})
+            
+            for casa_num, info_casa in casas.items():
+                cuspide = info_casa['cuspide']
+                angulo = np.radians(cuspide)
+                
+                # Línea de la cúspide de la casa
+                x_end = np.cos(angulo)
+                y_end = np.sin(angulo)
+                
+                # Dibujar línea desde el centro hasta el borde exterior
+                ax.plot([0, x_end], [0, y_end], 'r-', linewidth=1.5, alpha=0.7)
+                
+                # Etiqueta de la casa
+                label_radius = 1.08
+                label_x = label_radius * np.cos(angulo)
+                label_y = label_radius * np.sin(angulo)
+                
+                ax.text(label_x, label_y, f'{casa_num}', 
+                       ha='center', va='center', fontsize=10, fontweight='bold',
+                       color='red', bbox=dict(boxstyle="circle,pad=0.2", 
+                       facecolor='white', alpha=0.8, edgecolor='red'))
+                
+                # Área de la casa (opcional - sombreado suave)
+                if casa_num < 12:
+                    next_casa = casas.get(casa_num + 1, {})
+                    next_cuspide = next_casa.get('cuspide', cuspide + 30)
+                else:
+                    next_cuspide = casas.get(1, {}).get('cuspide', 30)
+                
+                # Dibujar arco de la casa
+                start_angle = cuspide
+                end_angle = next_cuspide if next_cuspide > cuspide else next_cuspide + 360
+                
+                # Sombreado suave de la casa
+                theta = np.linspace(np.radians(start_angle), np.radians(end_angle), 100)
+                x_arc = 0.9 * np.cos(theta)
+                y_arc = 0.9 * np.sin(theta)
+                ax.fill_between(x_arc, y_arc, alpha=0.05, color='blue')
+                        
+        except Exception as e:
+            print(f"Error dibujando casas: {e}")
+
+    def _dibujar_signos_zodiaco(self, ax):
+        """Dibuja las divisiones y etiquetas de los signos zodiacales"""
+        signos = ['Aries', 'Tauro', 'Géminis', 'Cáncer', 'Leo', 'Virgo',
+                 'Libra', 'Escorpio', 'Sagitario', 'Capricornio', 'Acuario', 'Piscis']
+        
+        signo_colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD',
+                       '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA']
+        
+        for i, signo in enumerate(signos):
+            angulo = i * 30  # 30 grados por signo
+            rad_angulo = np.radians(angulo)
+            
+            # Línea divisoria del signo
+            x_end = np.cos(rad_angulo)
+            y_end = np.sin(rad_angulo)
+            ax.plot([0.4*x_end, 1.0*x_end], [0.4*y_end, 1.0*y_end], 
+                   'k-', linewidth=1, alpha=0.3)
+            
+            # Etiqueta del signo
+            text_radius = 1.18
+            text_x = text_radius * np.cos(rad_angulo + np.radians(15))
+            text_y = text_radius * np.sin(rad_angulo + np.radians(15))
+            
+            ax.text(text_x, text_y, signo, ha='center', va='center', 
+                   fontsize=9, fontweight='bold', rotation=angulo,
+                   bbox=dict(boxstyle="round,pad=0.3", facecolor=signo_colors[i], 
+                           alpha=0.8, edgecolor='black'))
+
+    def _dibujar_planetas(self, ax, carta_data):
+        """Dibuja los planetas en sus posiciones y devuelve sus coordenadas"""
+        posiciones = {}
+        radio_planetas = 0.75  # Radio para posicionar planetas
+        
+        for planeta, info in carta_data.items():
+            if planeta not in ['ascendente', 'parte_fortuna', 'casas', 'aspectos']:
+                try:
+                    longitud = info['longitud']
+                    angulo = np.radians(longitud)
+                    
+                    x = radio_planetas * np.cos(angulo)
+                    y = radio_planetas * np.sin(angulo)
+                    
+                    # Guardar posición para aspectos
+                    posiciones[planeta] = (x, y, longitud)
+                    
+                    # Color del planeta
+                    color = self._get_planet_color(planeta)
+                    
+                    # Símbolo o círculo del planeta
+                    ax.plot(x, y, 'o', markersize=14, color=color,
+                           markeredgecolor='black', markeredgewidth=2,
+                           zorder=5)
+                    
+                    # Etiqueta del planeta
+                    label_offset = 0.12
+                    ax.text(x, y - label_offset, planeta, 
+                           ha='center', va='top', fontsize=8, fontweight='bold',
+                           bbox=dict(boxstyle="round,pad=0.2", facecolor='white', 
+                                   alpha=0.9, edgecolor=color))
+                    
+                    # Información adicional (signo y casa)
+                    info_text = f"{info['signo']} ({info['casa']})"
+                    ax.text(x, y - label_offset - 0.05, info_text,
+                           ha='center', va='top', fontsize=6,
+                           bbox=dict(boxstyle="round,pad=0.1", facecolor='lightyellow', 
+                                   alpha=0.7))
+                            
+                except Exception as e:
+                    print(f"Error dibujando planeta {planeta}: {e}")
+        
+        return posiciones
+
+    def _dibujar_aspectos(self, ax, posiciones_planetas, carta_data):
+        """Dibuja los aspectos entre planetas"""
+        try:
+            aspectos = carta_data.get('aspectos', [])
+            
+            for aspecto in aspectos:
+                planeta1 = aspecto['planeta1']
+                planeta2 = aspecto['planeta2']
+                
+                if planeta1 in posiciones_planetas and planeta2 in posiciones_planetas:
+                    x1, y1, lon1 = posiciones_planetas[planeta1]
+                    x2, y2, lon2 = posiciones_planetas[planeta2]
+                    
+                    # Configuración del aspecto
+                    color, estilo, grosor = self._get_aspect_style(aspecto['aspecto'])
+                    
+                    # Dibujar línea del aspecto
+                    ax.plot([x1, x2], [y1, y2], color=color, linestyle=estilo,
+                           linewidth=grosor, alpha=0.7, zorder=1)
+                    
+                    # Punto medio para etiqueta
+                    mid_x = (x1 + x2) / 2
+                    mid_y = (y1 + y2) / 2
+                    
+                    # Etiqueta del aspecto
+                    ax.text(mid_x, mid_y, aspecto['aspecto'][:3], 
+                           ha='center', va='center', fontsize=6, fontweight='bold',
+                           bbox=dict(boxstyle="round,pad=0.1", facecolor=color, 
+                                   alpha=0.3))
+                            
+        except Exception as e:
+            print(f"Error dibujando aspectos: {e}")
+
+    def _dibujar_puntos_importantes(self, ax, carta_data):
+        """Dibuja puntos importantes como Ascendente, MC, Parte de la Fortuna"""
+        try:
+            # Ascendente
+            asc = carta_data.get('ascendente', {})
+            if asc:
+                lon_asc = asc['longitud']
+                self._dibujar_punto_especial(ax, lon_asc, 'ASC', 'green', 0.85)
+            
+            # Parte de la Fortuna
+            fortuna = carta_data.get('parte_fortuna', {})
+            if fortuna:
+                lon_fortuna = fortuna['longitud']
+                self._dibujar_punto_especial(ax, lon_fortuna, 'FORT', 'purple', 0.65)
+            
+            # Medio Cielo (aproximado - casa 10)
+            casas = carta_data.get('casas', {})
+            if 10 in casas:
+                lon_mc = casas[10]['cuspide']
+                self._dibujar_punto_especial(ax, lon_mc, 'MC', 'blue', 0.85)
+                        
+        except Exception as e:
+            print(f"Error dibujando puntos importantes: {e}")
+
+    def _dibujar_punto_especial(self, ax, longitud, etiqueta, color, radio):
+        """Dibuja un punto especial en el gráfico"""
+        angulo = np.radians(longitud)
+        x = radio * np.cos(angulo)
+        y = radio * np.sin(angulo)
+        
+        # Dibujar punto
+        ax.plot(x, y, 's', markersize=10, color=color, 
+               markeredgecolor='black', markeredgewidth=1.5, zorder=6)
+        
+        # Etiqueta
+        ax.text(x, y + 0.08, etiqueta, ha='center', va='bottom', 
+               fontsize=8, fontweight='bold', color=color,
+               bbox=dict(boxstyle="round,pad=0.2", facecolor='white', alpha=0.9))
+
+    def _get_planet_color(self, planeta):
+        """Devuelve colores específicos para cada planeta"""
+        colors = {
+            'Sun': '#FFD700',    # Dorado
+            'Moon': '#C0C0C0',   # Plateado
+            'Mercury': '#87CEEB', # Azul claro
+            'Venus': '#FFB6C1',  # Rosa claro
+            'Mars': '#FF4500',   # Rojo anaranjado
+            'Jupiter': '#FFA500', # Naranja
+            'Saturn': '#A9A9A9', # Gris oscuro
+            'Uranus': '#40E0D0', # Turquesa
+            'Neptune': '#1E90FF', # Azul dodger
+            'Pluto': '#8B008B'   # Magenta oscuro
+        }
+        return colors.get(planeta, '#333333')
+
+    def _get_aspect_style(self, aspecto):
+        """Devuelve color, estilo y grosor para cada tipo de aspecto"""
+        aspectos_config = {
+            'Conjunction': ('#FFD700', '-', 2.0),   # Dorado, sólido, grueso
+            'Opposition': ('#FF4500', '-', 2.0),    # Rojo, sólido, grueso
+            'Square': ('#FF0000', '--', 1.5),       # Rojo, discontinuo, medio
+            'Trine': ('#00FF00', '-', 1.5),         # Verde, sólido, medio
+            'Sextile': ('#0000FF', ':', 1.0),       # Azul, punteado, fino
+            'Quincunx': ('#8A2BE2', '-.', 1.0),     # Violeta, punto-raya, fino
+            'Semisextile': ('#4682B4', ':', 0.8),   # Azul acero, punteado, muy fino
+        }
+        return aspectos_config.get(aspecto, ('#666666', '--', 1.0))
+
+    def _agregar_titulo_leyenda(self, ax, consultante_nombre):
+        """Agrega título y leyenda al gráfico"""
+        # Título principal
+        ax.set_title(f'CARTA NATAL COMPLETA\n{consultante_nombre}\n', 
+                    fontsize=18, fontweight='bold', pad=20)
+        
+        # Leyenda de aspectos
+        leyenda_x = -1.25
+        leyenda_y = 1.2
+        
+        aspectos_leyenda = [
+            ('Conjunction', 'Conjunción', '#FFD700'),
+            ('Opposition', 'Oposición', '#FF4500'),
+            ('Square', 'Cuadratura', '#FF0000'),
+            ('Trine', 'Trino', '#00FF00'),
+            ('Sextile', 'Sextil', '#0000FF')
+        ]
+        
+        for i, (aspecto, nombre, color) in enumerate(aspectos_leyenda):
+            y_pos = leyenda_y - i * 0.05
+            ax.plot([leyenda_x, leyenda_x + 0.05], [y_pos, y_pos], 
+                   color=color, linewidth=2)
+            ax.text(leyenda_x + 0.07, y_pos, nombre, 
+                   ha='left', va='center', fontsize=8)
+
     def generar_carta_natal_completa(self, fecha_nacimiento, hora_local, zona_horaria, 
                                    consultante_nombre, latitud_gms, longitud_gms):
-        """Genera una carta natal completa usando pyswisseph"""
+        """Genera una carta natal completa"""
         
         try:
             # Usar el análisis astrológico existente como base
@@ -815,10 +994,10 @@ class CartaNatalIntegrada:
             # Calcular información adicional para la carta natal
             carta_data = self._calcular_info_carta_natal(natal_pos, houses, asc, part_fort)
             
-            # Generar gráfico de carta natal circular
-            figura_carta_natal = self.generar_grafico_carta_natal_circular(carta_data, consultante_nombre)
+            # Generar gráfico MEJORADO de carta natal
+            figura_carta_natal = self.generar_grafico_carta_natal_completo(carta_data, consultante_nombre)
             
-            # Generar PDF con gráfico de carta natal
+            # Generar PDF con gráfico mejorado
             pdf_bytes = self.analizador_web.generar_pdf_completo(
                 resultado_base, 
                 resultado_base['events'], 
@@ -840,10 +1019,9 @@ class CartaNatalIntegrada:
             
         except Exception as e:
             return {'success': False, 'error': str(e)}
-    
+
     def _calcular_info_carta_natal(self, natal_pos, houses, asc, part_fort):
-        """Calcula información específica para la carta natal usando pyswisseph"""
-        
+        """Calcula información específica para la carta natal"""
         carta = {}
         
         # Signos y casas para cada planeta
@@ -883,7 +1061,7 @@ class CartaNatalIntegrada:
             'casa': casa_fortuna
         }
         
-        # Casas astrológicas
+        # Casas astrológicas (IMPORTANTE: para el nuevo gráfico)
         carta['casas'] = {}
         for i in range(12):
             cuspide = houses[i]
@@ -893,112 +1071,81 @@ class CartaNatalIntegrada:
                 'signo': signo_casa
             }
         
-        # Aspectos importantes
+        # Aspectos importantes (IMPORTANTE: para el nuevo gráfico)
         carta['aspectos'] = self._calcular_aspectos_importantes(natal_pos)
         
         return carta
-    
-    def generar_grafico_carta_natal_circular(self, carta_data, consultante_nombre):
-        """Genera un gráfico circular tipo chart para la carta natal"""
-        try:
-            fig, ax = plt.subplots(figsize=(10, 10))
-            
-            # Configurar el gráfico
-            ax.set_xlim(-1.2, 1.2)
-            ax.set_ylim(-1.2, 1.2)
-            ax.set_aspect('equal')
-            ax.axis('off')
-            
-            # Dibujar círculos concéntricos
-            circle_outer = plt.Circle((0, 0), 1.0, fill=False, edgecolor='black', linewidth=3)
-            circle_mid = plt.Circle((0, 0), 0.7, fill=False, edgecolor='gray', linewidth=2, alpha=0.7)
-            circle_inner = plt.Circle((0, 0), 0.4, fill=False, edgecolor='lightgray', linewidth=1, alpha=0.5)
-            
-            ax.add_patch(circle_outer)
-            ax.add_patch(circle_mid)
-            ax.add_patch(circle_inner)
-            
-            # Dividir en 12 signos del zodiaco
-            signos = ['Aries', 'Tauro', 'Géminis', 'Cáncer', 'Leo', 'Virgo',
-                     'Libra', 'Escorpio', 'Sagitario', 'Capricornio', 'Acuario', 'Piscis']
-            
-            signo_colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD',
-                           '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA']
-            
-            # Dibujar divisiones de signos y etiquetas
-            for i, signo in enumerate(signos):
-                angle = i * 30  # 30 grados por signo
-                rad_angle = np.radians(angle)
-                
-                # Línea divisoria
-                x_end = np.cos(rad_angle)
-                y_end = np.sin(rad_angle)
-                ax.plot([0.4*x_end, 1.0*x_end], [0.4*y_end, 1.0*y_end], 'k-', linewidth=1, alpha=0.5)
-                
-                # Etiqueta del signo
-                text_x = 1.15 * np.cos(rad_angle + np.radians(15))
-                text_y = 1.15 * np.sin(rad_angle + np.radians(15))
-                
-                ax.text(text_x, text_y, signo, ha='center', va='center', 
-                       fontsize=9, fontweight='bold', rotation=angle,
-                       bbox=dict(boxstyle="round,pad=0.3", facecolor=signo_colors[i], alpha=0.8))
-            
-            # Posicionar planetas en el gráfico
-            for planeta, info in carta_data.items():
-                if planeta not in ['ascendente', 'parte_fortuna', 'casas', 'aspectos']:
-                    longitud = info['longitud']
-                    # Convertir longitud a posición angular
-                    angle = np.radians(longitud)
-                    radius = 0.85  # Radio para posicionar planetas
-                    
-                    x = radius * np.cos(angle)
-                    y = radius * np.sin(angle)
-                    
-                    # Color del planeta
-                    color = self._get_planet_color(planeta)
-                    
-                    # Dibujar planeta
-                    ax.plot(x, y, 'o', markersize=12, color=color, 
-                           markeredgecolor='black', markeredgewidth=1.5)
-                    
-                    # Etiqueta del planeta
-                    ax.text(x, y-0.08, f"{planeta}\n{info['signo']}", 
-                           ha='center', va='top', fontsize=7, fontweight='bold',
-                           bbox=dict(boxstyle="round,pad=0.2", facecolor='white', alpha=0.9))
-            
-            # Título
-            ax.set_title(f'CARTA NATAL\n{consultante_nombre}', 
-                        fontsize=16, fontweight='bold', pad=20)
-            
-            # Leyenda de elementos
-            elementos = ['Fuego', 'Tierra', 'Aire', 'Agua']
-            elemento_colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']
-            
-            for i, elemento in enumerate(elementos):
-                ax.plot([-1.1, -1.0], [0.9-i*0.1, 0.9-i*0.1], 
-                       color=elemento_colors[i], linewidth=3)
-                ax.text(-0.95, 0.9-i*0.1, elemento, ha='left', va='center', fontsize=9)
-            
-            plt.tight_layout()
-            return fig
-            
-        except Exception as e:
-            st.error(f"Error al generar gráfico circular de carta natal: {e}")
-            return None
-    
-    def _get_planet_color(self, planeta):
-        """Devuelve colores específicos para cada planeta"""
-        colors = {
-            'Sun': '#FFD700',    # Dorado
-            'Moon': '#C0C0C0',   # Plateado
-            'Mercury': '#87CEEB', # Azul claro
-            'Venus': '#FFB6C1',  # Rosa claro
-            'Mars': '#FF4500',   # Rojo anaranjado
-            'Jupiter': '#FFA500', # Naranja
-            'Saturn': '#A9A9A9', # Gris oscuro
+
+    def _calcular_aspectos_importantes(self, natal_pos):
+        """Calcula los aspectos más importantes entre planetas"""
+        aspectos = []
+        planetas = list(natal_pos.keys())
+        
+        # Configuración de orbes por aspecto
+        orbes = {
+            "Conjunction": 8.0,
+            "Opposition": 8.0,
+            "Square": 6.0,
+            "Trine": 6.0,
+            "Sextile": 4.0,
+            "Quincunx": 2.0,
+            "Semisextile": 1.0
         }
-        return colors.get(planeta, '#333333')
-    
+        
+        for i in range(len(planetas)):
+            for j in range(i + 1, len(planetas)):
+                planeta1 = planetas[i]
+                planeta2 = planetas[j]
+                
+                lon1 = natal_pos[planeta1]
+                lon2 = natal_pos[planeta2]
+                
+                for aspecto, angulo in self.analizador_web.ASPECTS.items():
+                    # Agregar aspectos menores
+                    if aspecto == "Sextile":
+                        # También calcular quincunx (150°) y semisextil (30°)
+                        aspectos_extras = {
+                            "Quincunx": 150.0,
+                            "Semisextile": 30.0
+                        }
+                        for asp_extra, ang_extra in aspectos_extras.items():
+                            separacion = self.analizador_web.diferencia_grados(lon1, lon2)
+                            distancia_al_aspecto = abs(separacion - ang_extra)
+                            
+                            if distancia_al_aspecto > 180:
+                                distancia_al_aspecto = abs(distancia_al_aspecto - 360)
+                            
+                            orb_permitido = orbes.get(asp_extra, 2.0)
+                            if distancia_al_aspecto <= orb_permitido:
+                                aspectos.append({
+                                    'planeta1': planeta1,
+                                    'planeta2': planeta2,
+                                    'aspecto': asp_extra,
+                                    'separacion': separacion,
+                                    'precision': distancia_al_aspecto,
+                                    'color': self._get_aspect_style(asp_extra)[0]
+                                })
+                    
+                    # Cálculo de aspectos principales
+                    separacion = self.analizador_web.diferencia_grados(lon1, lon2)
+                    distancia_al_aspecto = abs(separacion - angulo)
+                    
+                    if distancia_al_aspecto > 180:
+                        distancia_al_aspecto = abs(distancia_al_aspecto - 360)
+                    
+                    orb_permitido = orbes.get(aspecto, 3.0)
+                    if distancia_al_aspecto <= orb_permitido:
+                        aspectos.append({
+                            'planeta1': planeta1,
+                            'planeta2': planeta2,
+                            'aspecto': aspecto,
+                            'separacion': separacion,
+                            'precision': distancia_al_aspecto,
+                            'color': self._get_aspect_style(aspecto)[0]
+                        })
+        
+        return aspectos
+
     def _obtener_elemento_signo(self, signo):
         elementos = {
             'Aries': 'Fuego', 'Tauro': 'Tierra', 'Géminis': 'Aire', 'Cáncer': 'Agua',
@@ -1015,43 +1162,9 @@ class CartaNatalIntegrada:
             'Capricornio': 'Cardinal', 'Acuario': 'Fijo', 'Piscis': 'Mutable'
         }
         return cualidades.get(signo, 'Desconocido')
-    
-    def _calcular_aspectos_importantes(self, natal_pos):
-        """Calcula los aspectos más importantes entre planetas usando pyswisseph"""
-        aspectos = []
-        
-        planetas = list(natal_pos.keys())
-        
-        for i in range(len(planetas)):
-            for j in range(i + 1, len(planetas)):
-                planeta1 = planetas[i]
-                planeta2 = planetas[j]
-                
-                lon1 = natal_pos[planeta1]
-                lon2 = natal_pos[planeta2]
-                
-                for aspecto, angulo in self.analizador_web.ASPECTS.items():
-                    separacion = self.analizador_web.diferencia_grados(lon1, lon2)
-                    distancia_al_aspecto = abs(separacion - angulo)
-                    
-                    if distancia_al_aspecto > 180:
-                        distancia_al_aspecto = abs(distancia_al_aspecto - 360)
-                    
-                    if distancia_al_aspecto <= 3.0:  # Orb más amplio para aspectos natales
-                        aspectos.append({
-                            'planeta1': planeta1,
-                            'planeta2': planeta2,
-                            'aspecto': aspecto,
-                            'separacion': separacion,
-                            'precision': distancia_al_aspecto,
-                            'color': self.analizador_web.ASPECT_COLORS.get(aspecto, "#333333")
-                        })
-        
-        return aspectos
-    
+
     def _generar_interpretaciones(self, carta_data, resultado_base):
         """Genera interpretaciones básicas para la carta natal"""
-        
         interpretaciones = {}
         
         # Interpretación del Sol
@@ -1182,10 +1295,10 @@ class CartaNatalIntegrada:
         
         return " | ".join(sintesis)
 
-# ----------------------------- FUNCIONES DE VISUALIZACIÓN -----------------------------
+# ----------------------------- FUNCIONES DE VISUALIZACIÓN MEJORADAS -----------------------------
 
-def mostrar_carta_natal(resultado):
-    """Muestra los resultados de la carta natal usando solo pyswisseph"""
+def mostrar_carta_natal_mejorada(resultado):
+    """Muestra los resultados de la carta natal con el gráfico mejorado"""
     
     st.success("✅ Carta Natal generada exitosamente!")
     
@@ -1193,12 +1306,65 @@ def mostrar_carta_natal(resultado):
     interpretaciones = resultado['interpretaciones']
     analisis_base = resultado['analisis_base']
     
-    # GRÁFICO DE CARTA NATAL (NUEVO)
-    st.header("📊 Gráfico de Carta Natal")
+    # GRÁFICO MEJORADO DE CARTA NATAL
+    st.header("🎨 Gráfico Completo de Carta Natal")
     if resultado.get('figura_carta_natal'):
         st.pyplot(resultado['figura_carta_natal'])
+        st.info("""
+        **Leyenda del gráfico:**
+        - 🔴 **Números rojos**: Casas astrológicas
+        - 🟢 **ASC**: Ascendente
+        - 🔵 **MC**: Medio Cielo
+        - 🟣 **FORT**: Parte de la Fortuna
+        - **Líneas de colores**: Aspectos entre planetas
+        """)
     else:
         st.info("No se pudo generar el gráfico de carta natal.")
+    
+    # INFORMACIÓN DETALLADA DE ASPECTOS
+    st.header("🔗 Aspectos Detectados")
+    aspectos = carta_data.get('aspectos', [])
+    
+    if aspectos:
+        # Separar aspectos mayores y menores
+        aspectos_mayores = [asp for asp in aspectos if asp['aspecto'] in ['Conjunction', 'Opposition', 'Square', 'Trine']]
+        aspectos_menores = [asp for asp in aspectos if asp['aspecto'] in ['Sextile', 'Quincunx', 'Semisextile']]
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Aspectos Mayores")
+            for aspecto in aspectos_mayores:
+                precision_color = "🟢" if aspecto['precision'] <= 1.0 else "🟡" if aspecto['precision'] <= 3.0 else "🔴"
+                st.write(
+                    f"{precision_color} **{aspecto['planeta1']} {aspecto['aspecto']} {aspecto['planeta2']}** "
+                    f"(Orb: {aspecto['precision']:.2f}°)"
+                )
+        
+        with col2:
+            st.subheader("Aspectos Menores")
+            for aspecto in aspectos_menores:
+                precision_color = "🟢" if aspecto['precision'] <= 1.0 else "🟡" if aspecto['precision'] <= 2.0 else "🔴"
+                st.write(
+                    f"{precision_color} **{aspecto['planeta1']} {aspecto['aspecto']} {aspecto['planeta2']}** "
+                    f"(Orb: {aspecto['precision']:.2f}°)"
+                )
+    else:
+        st.info("No se encontraron aspectos significativos")
+    
+    # INFORMACIÓN DE CASAS
+    st.header("🏠 Casas Astrológicas")
+    casas = carta_data.get('casas', {})
+    
+    if casas:
+        cols = st.columns(4)
+        for i, (num_casa, info_casa) in enumerate(casas.items()):
+            with cols[i % 4]:
+                st.metric(
+                    label=f"Casa {num_casa}",
+                    value=info_casa['signo'],
+                    delta=f"Cúspide: {info_casa['cuspide']:.1f}°"
+                )
     
     # Información básica
     st.header("📋 Información de la Carta Natal")
@@ -1246,46 +1412,6 @@ def mostrar_carta_natal(resultado):
             st.subheader("💫 Síntesis")
             st.info(interpretaciones['sintesis'])
     
-    # Aspectos
-    st.header("🔗 Aspectos Importantes")
-    aspectos = carta_data.get('aspectos', [])
-    
-    if aspectos:
-        # Mostrar aspectos más precisos primero
-        aspectos_ordenados = sorted(aspectos, key=lambda x: x['precision'])
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Aspectos Mayores")
-            for aspecto in aspectos_ordenados[:8]:
-                if aspecto['aspecto'] in ["Conjunction", "Opposition", "Square", "Trine"]:
-                    st.write(
-                        f"**{aspecto['planeta1']} {aspecto['aspecto']} {aspecto['planeta2']}** "
-                        f"({aspecto['separacion']:.1f}°, precisión: {aspecto['precision']:.2f}°)"
-                    )
-        
-        with col2:
-            st.subheader("Aspectos Menores")
-            for aspecto in aspectos_ordenados[:8]:
-                if aspecto['aspecto'] in ["Sextile"]:
-                    st.write(
-                        f"**{aspecto['planeta1']} {aspecto['aspecto']} {aspecto['planeta2']}** "
-                        f"({aspecto['separacion']:.1f}°, precisión: {aspecto['precision']:.2f}°)"
-                    )
-    else:
-        st.info("No se encontraron aspectos significativos dentro del orb de 3°")
-    
-    # Casas
-    st.header("🏠 Casas Astrológicas")
-    casas = carta_data.get('casas', {})
-    
-    if casas:
-        cols = st.columns(3)
-        for i, (num_casa, info_casa) in enumerate(casas.items()):
-            with cols[i % 3]:
-                st.write(f"**Casa {num_casa}:** {info_casa['signo']}")
-                st.write(f"Cúspide: {info_casa['cuspide']:.2f}°")
-    
     # Descargas
     st.header("📥 Descargar Resultados Completos")
     
@@ -1324,218 +1450,6 @@ def mostrar_carta_natal(resultado):
             st.info("✅ CSV incluye: Todos los eventos astrológicos con años, fechas y precisiones")
         else:
             st.warning("CSV no disponible")
-
-def mostrar_analisis_integral(resultado_base, resultado_carta):
-    """Muestra el análisis integral combinado usando solo pyswisseph"""
-    
-    st.success("✅ Análisis Integral completado!")
-    
-    # Crear pestañas para organizar la información
-    tab1, tab2, tab3 = st.tabs(["🎯 Hyleg y Alcocoden", "📊 Carta Natal", "🌌 Visión Integral"])
-    
-    with tab1:
-        mostrar_resultados(resultado_base)
-    
-    with tab2:
-        mostrar_carta_natal(resultado_carta)
-    
-    with tab3:
-        st.header("🌌 Síntesis Integral")
-        
-        # Combinar información clave de ambos análisis
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Puntos Vitales")
-            st.write(f"**Hyleg:** {resultado_base['hyleg_point']}")
-            st.write(f"**Alcocoden:** {resultado_base['alcocoden_point']}")
-            st.write(f"**Años potenciales:** {resultado_base['anios_alcocoden']}")
-            
-            # Interpretación del Sol desde la carta natal
-            sol_info = resultado_carta['carta_natal'].get('Sun', {})
-            if sol_info:
-                st.write(f"**Sol en:** {sol_info['signo']} (casa {sol_info['casa']})")
-                st.write(f"**Elemento:** {sol_info['elemento']}")
-        
-        with col2:
-            st.subheader("Características Personales")
-            asc_info = resultado_carta['carta_natal'].get('ascendente', {})
-            if asc_info:
-                st.write(f"**Ascendente:** {asc_info['signo']}")
-                st.write(f"**Regente:** {asc_info['regente']}")
-            
-            luna_info = resultado_carta['carta_natal'].get('Moon', {})
-            if luna_info:
-                st.write(f"**Luna en:** {luna_info['signo']} (casa {luna_info['casa']})")
-                st.write(f"**Elemento:** {luna_info['elemento']}")
-        
-        # Recomendaciones basadas en el análisis combinado
-        st.subheader("💫 Recomendaciones Integrales")
-        
-        recomendaciones = []
-        
-        # Recomendación basada en Hyleg
-        hyleg = resultado_base['hyleg_point']
-        if hyleg == "Sun":
-            recomendaciones.append("**Fortalece tu energía vital** a través de la expresión creativa y el reconocimiento personal")
-        elif hyleg == "Moon":
-            recomendaciones.append("**Cuida tu mundo emocional** y busca entornos que te brinden seguridad emocional")
-        elif hyleg == "Ascendente":
-            recomendaciones.append("**Desarrolla tu identidad personal** y trabaja en tu autoexpresión")
-        elif hyleg == "Fortuna":
-            recomendaciones.append("**Aprovecha los ciclos de fortuna** y desarrolla tus talentos naturales")
-        
-        # Recomendación basada en Alcocoden
-        alcocoden = resultado_base['alcocoden_point']
-        anios = resultado_base['anios_alcocoden']
-        recomendaciones.append(f"**Período crítico alrededor de los {anios} años** - momento para reevaluar y transformar")
-        
-        # Recomendación basada en elementos
-        sol_info = resultado_carta['carta_natal'].get('Sun', {})
-        elemento_sol = sol_info.get('elemento', '')
-        if elemento_sol == 'Fuego':
-            recomendaciones.append("**Canaliza tu energía** con actividad física y proyectos inspiradores")
-        elif elemento_sol == 'Tierra':
-            recomendaciones.append("**Estabilidad y paciencia** - construye bases sólidas paso a paso")
-        elif elemento_sol == 'Aire':
-            recomendaciones.append("**Comunica tus ideas** - el intercambio intelectual te vitaliza")
-        elif elemento_sol == 'Agua':
-            recomendaciones.append("**Cuida tu sensibilidad** - busca equilibrio entre dar y recibir apoyo emocional")
-        
-        for rec in recomendaciones:
-            st.write(f"• {rec}")
-
-# ----------------------------- INTERFAZ STREAMLIT AMPLIADA -----------------------------
-
-def main_ampliada():
-    """Versión ampliada del main para incluir carta natal usando solo pyswisseph"""
-    
-    st.set_page_config(
-        page_title="Astrología Integral - Hyleg & Carta Natal",
-        page_icon="♋",
-        layout="wide"
-    )
-    
-    st.title("♋ Astrología Integral - Hyleg & Carta Natal")
-    st.markdown("---")
-    
-    # Sidebar para selección de módulo
-    with st.sidebar:
-        st.header("🔮 Módulos de Análisis")
-        
-        modulo = st.radio(
-            "Selecciona el tipo de análisis:",
-            ["🎯 Hyleg y Alcocoden", "📊 Carta Natal Completa", "🌌 Análisis Integral"],
-            index=0
-        )
-        
-        st.markdown("---")
-        st.header("📊 Datos de Nacimiento")
-        
-        # Los mismos inputs de datos que ya tienes...
-        consultante_nombre = st.text_input("Nombre del consultante", "Alejo")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            fecha_nacimiento = st.text_input("Fecha (YYYY-MM-DD)", "1981-07-15")
-        with col2:
-            hora_local = st.text_input("Hora local (HH:MM)", "05:16")
-        
-        zona_horaria = st.number_input("Zona horaria", value=-4.0, step=0.5)
-        
-        st.subheader("📍 Coordenadas Geográficas")
-        
-        # ... (mantener tus inputs de coordenadas existentes)
-        st.write("**Latitud:**")
-        col_lat1, col_lat2, col_lat3, col_lat4 = st.columns(4)
-        with col_lat1:
-            lat_grados = st.number_input("Grados", min_value=0, max_value=90, value=8, key="lat_g")
-        with col_lat2:
-            lat_minutos = st.number_input("Minutos", min_value=0, max_value=59, value=35, key="lat_m")
-        with col_lat3:
-            lat_segundos = st.number_input("Segundos", value=52.8, key="lat_s")
-        with col_lat4:
-            lat_direccion = st.selectbox("Dirección", ["N", "S"], key="lat_d")
-        
-        st.write("**Longitud:**")
-        col_lon1, col_lon2, col_lon3, col_lon4 = st.columns(4)
-        with col_lon1:
-            lon_grados = st.number_input("Grados", min_value=0, max_value=180, value=71, key="lon_g")
-        with col_lon2:
-            lon_minutos = st.number_input("Minutos", min_value=0, max_value=59, value=8, key="lon_m")
-        with col_lon3:
-            lon_segundos = st.number_input("Segundos", value=38.4, key="lon_s")
-        with col_lon4:
-            lon_direccion = st.selectbox("Dirección", ["E", "W"], index=1, key="lon_d")
-    
-    # Botón de análisis según el módulo seleccionado
-    analizar_text = ""
-    if modulo == "🎯 Hyleg y Alcocoden":
-        analizar_text = "🎯 Ejecutar Análisis de Hyleg y Alcocoden"
-    elif modulo == "📊 Carta Natal Completa":
-        analizar_text = "📊 Generar Carta Natal Completa"
-    else:
-        analizar_text = "🌌 Ejecutar Análisis Integral Completo"
-    
-    if st.button(analizar_text, type="primary", use_container_width=True, key="analisis_principal"):
-        with st.spinner("Realizando cálculos astrológicos... Esto puede tomar unos segundos."):
-            latitud_gms = (lat_grados, lat_minutos, lat_segundos, lat_direccion)
-            longitud_gms = (lon_grados, lon_minutos, lon_segundos, lon_direccion)
-            
-            if modulo == "🎯 Hyleg y Alcocoden":
-                # Usar tu análisis original
-                analizador = AnalisisAstrologicoWeb()
-                resultado = analizador.realizar_analisis_completo(
-                    fecha_nacimiento, hora_local, zona_horaria, 
-                    consultante_nombre, latitud_gms, longitud_gms
-                )
-                
-                if resultado['success']:
-                    # Generar PDF para Hyleg y Alcocoden
-                    pdf_bytes = analizador.generar_pdf_completo(
-                        resultado, resultado['events'], consultante_nombre
-                    )
-                    resultado['pdf_bytes'] = pdf_bytes
-                    
-                    mostrar_resultados(resultado)
-                else:
-                    st.error(f"❌ Error en el análisis: {resultado['error']}")
-            
-            elif modulo == "📊 Carta Natal Completa":
-                # Usar el nuevo análisis de carta natal
-                carta_natal = CartaNatalIntegrada()
-                resultado = carta_natal.generar_carta_natal_completa(
-                    fecha_nacimiento, hora_local, zona_horaria,
-                    consultante_nombre, latitud_gms, longitud_gms
-                )
-                
-                if resultado['success']:
-                    mostrar_carta_natal(resultado)
-                else:
-                    st.error(f"❌ Error en la carta natal: {resultado['error']}")
-            
-            else:  # Análisis integral
-                # Ejecutar ambos análisis
-                analizador_web = AnalisisAstrologicoWeb()
-                carta_natal = CartaNatalIntegrada()
-                
-                resultado_base = analizador_web.realizar_analisis_completo(
-                    fecha_nacimiento, hora_local, zona_horaria,
-                    consultante_nombre, latitud_gms, longitud_gms
-                )
-                
-                if resultado_base['success']:
-                    resultado_carta = carta_natal.generar_carta_natal_completa(
-                        fecha_nacimiento, hora_local, zona_horaria,
-                        consultante_nombre, latitud_gms, longitud_gms
-                    )
-                    
-                    if resultado_carta['success']:
-                        mostrar_analisis_integral(resultado_base, resultado_carta)
-                    else:
-                        st.error(f"❌ Error en carta natal: {resultado_carta['error']}")
-                else:
-                    st.error(f"❌ Error en análisis base: {resultado_base['error']}")
 
 def mostrar_resultados(resultado):
     st.success("✅ Análisis completado exitosamente!")
@@ -1651,6 +1565,218 @@ def mostrar_resultados(resultado):
         - **Incluye**: Tablas detalladas, interpretación por bienios, eventos hasta 100 años
         """)
 
-# ============================= LLAMADO FINAL ACTUALIZADO =============================
+def mostrar_analisis_integral(resultado_base, resultado_carta):
+    """Muestra el análisis integral combinado"""
+    
+    st.success("✅ Análisis Integral completado!")
+    
+    # Crear pestañas para organizar la información
+    tab1, tab2, tab3 = st.tabs(["🎯 Hyleg y Alcocoden", "📊 Carta Natal", "🌌 Visión Integral"])
+    
+    with tab1:
+        mostrar_resultados(resultado_base)
+    
+    with tab2:
+        mostrar_carta_natal_mejorada(resultado_carta)
+    
+    with tab3:
+        st.header("🌌 Síntesis Integral")
+        
+        # Combinar información clave de ambos análisis
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Puntos Vitales")
+            st.write(f"**Hyleg:** {resultado_base['hyleg_point']}")
+            st.write(f"**Alcocoden:** {resultado_base['alcocoden_point']}")
+            st.write(f"**Años potenciales:** {resultado_base['anios_alcocoden']}")
+            
+            # Interpretación del Sol desde la carta natal
+            sol_info = resultado_carta['carta_natal'].get('Sun', {})
+            if sol_info:
+                st.write(f"**Sol en:** {sol_info['signo']} (casa {sol_info['casa']})")
+                st.write(f"**Elemento:** {sol_info['elemento']}")
+        
+        with col2:
+            st.subheader("Características Personales")
+            asc_info = resultado_carta['carta_natal'].get('ascendente', {})
+            if asc_info:
+                st.write(f"**Ascendente:** {asc_info['signo']}")
+                st.write(f"**Regente:** {asc_info['regente']}")
+            
+            luna_info = resultado_carta['carta_natal'].get('Moon', {})
+            if luna_info:
+                st.write(f"**Luna en:** {luna_info['signo']} (casa {luna_info['casa']})")
+                st.write(f"**Elemento:** {luna_info['elemento']}")
+        
+        # Recomendaciones basadas en el análisis combinado
+        st.subheader("💫 Recomendaciones Integrales")
+        
+        recomendaciones = []
+        
+        # Recomendación basada en Hyleg
+        hyleg = resultado_base['hyleg_point']
+        if hyleg == "Sun":
+            recomendaciones.append("**Fortalece tu energía vital** a través de la expresión creativa y el reconocimiento personal")
+        elif hyleg == "Moon":
+            recomendaciones.append("**Cuida tu mundo emocional** y busca entornos que te brinden seguridad emocional")
+        elif hyleg == "Ascendente":
+            recomendaciones.append("**Desarrolla tu identidad personal** y trabaja en tu autoexpresión")
+        elif hyleg == "Fortuna":
+            recomendaciones.append("**Aprovecha los ciclos de fortuna** y desarrolla tus talentos naturales")
+        
+        # Recomendación basada en Alcocoden
+        alcocoden = resultado_base['alcocoden_point']
+        anios = resultado_base['anios_alcocoden']
+        recomendaciones.append(f"**Período crítico alrededor de los {anios} años** - momento para reevaluar y transformar")
+        
+        # Recomendación basada en elementos
+        sol_info = resultado_carta['carta_natal'].get('Sun', {})
+        elemento_sol = sol_info.get('elemento', '')
+        if elemento_sol == 'Fuego':
+            recomendaciones.append("**Canaliza tu energía** con actividad física y proyectos inspiradores")
+        elif elemento_sol == 'Tierra':
+            recomendaciones.append("**Estabilidad y paciencia** - construye bases sólidas paso a paso")
+        elif elemento_sol == 'Aire':
+            recomendaciones.append("**Comunica tus ideas** - el intercambio intelectual te vitaliza")
+        elif elemento_sol == 'Agua':
+            recomendaciones.append("**Cuida tu sensibilidad** - busca equilibrio entre dar y recibir apoyo emocional")
+        
+        for rec in recomendaciones:
+            st.write(f"• {rec}")
+
+# ----------------------------- INTERFAZ STREAMLIT MEJORADA -----------------------------
+
+def main_ampliada():
+    """Versión ampliada del main para incluir carta natal mejorada"""
+    
+    st.set_page_config(
+        page_title="Astrología Integral - Hyleg & Carta Natal",
+        page_icon="♋",
+        layout="wide"
+    )
+    
+    st.title("♋ Astrología Integral - Hyleg & Carta Natal")
+    st.markdown("---")
+    
+    # Sidebar para selección de módulo
+    with st.sidebar:
+        st.header("🔮 Módulos de Análisis")
+        
+        modulo = st.radio(
+            "Selecciona el tipo de análisis:",
+            ["🎯 Hyleg y Alcocoden", "📊 Carta Natal Completa", "🌌 Análisis Integral"],
+            index=0
+        )
+        
+        st.markdown("---")
+        st.header("📊 Datos de Nacimiento")
+        
+        # Los mismos inputs de datos que ya tienes...
+        consultante_nombre = st.text_input("Nombre del consultante", "Alejo")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            fecha_nacimiento = st.text_input("Fecha (YYYY-MM-DD)", "1981-07-15")
+        with col2:
+            hora_local = st.text_input("Hora local (HH:MM)", "05:16")
+        
+        zona_horaria = st.number_input("Zona horaria", value=-4.0, step=0.5)
+        
+        st.subheader("📍 Coordenadas Geográficas")
+        
+        # ... (mantener tus inputs de coordenadas existentes)
+        st.write("**Latitud:**")
+        col_lat1, col_lat2, col_lat3, col_lat4 = st.columns(4)
+        with col_lat1:
+            lat_grados = st.number_input("Grados", min_value=0, max_value=90, value=8, key="lat_g")
+        with col_lat2:
+            lat_minutos = st.number_input("Minutos", min_value=0, max_value=59, value=35, key="lat_m")
+        with col_lat3:
+            lat_segundos = st.number_input("Segundos", value=52.8, key="lat_s")
+        with col_lat4:
+            lat_direccion = st.selectbox("Dirección", ["N", "S"], key="lat_d")
+        
+        st.write("**Longitud:**")
+        col_lon1, col_lon2, col_lon3, col_lon4 = st.columns(4)
+        with col_lon1:
+            lon_grados = st.number_input("Grados", min_value=0, max_value=180, value=71, key="lon_g")
+        with col_lon2:
+            lon_minutos = st.number_input("Minutos", min_value=0, max_value=59, value=8, key="lon_m")
+        with col_lon3:
+            lon_segundos = st.number_input("Segundos", value=38.4, key="lon_s")
+        with col_lon4:
+            lon_direccion = st.selectbox("Dirección", ["E", "W"], index=1, key="lon_d")
+    
+    # Botón de análisis según el módulo seleccionado
+    analizar_text = ""
+    if modulo == "🎯 Hyleg y Alcocoden":
+        analizar_text = "🎯 Ejecutar Análisis de Hyleg y Alcocoden"
+    elif modulo == "📊 Carta Natal Completa":
+        analizar_text = "📊 Generar Carta Natal Completa"
+    else:
+        analizar_text = "🌌 Ejecutar Análisis Integral Completo"
+    
+    if st.button(analizar_text, type="primary", use_container_width=True, key="analisis_principal"):
+        with st.spinner("Realizando cálculos astrológicos... Esto puede tomar unos segundos."):
+            latitud_gms = (lat_grados, lat_minutos, lat_segundos, lat_direccion)
+            longitud_gms = (lon_grados, lon_minutos, lon_segundos, lon_direccion)
+            
+            if modulo == "🎯 Hyleg y Alcocoden":
+                # Usar tu análisis original
+                analizador = AnalisisAstrologicoWeb()
+                resultado = analizador.realizar_analisis_completo(
+                    fecha_nacimiento, hora_local, zona_horaria, 
+                    consultante_nombre, latitud_gms, longitud_gms
+                )
+                
+                if resultado['success']:
+                    # Generar PDF para Hyleg y Alcocoden
+                    pdf_bytes = analizador.generar_pdf_completo(
+                        resultado, resultado['events'], consultante_nombre
+                    )
+                    resultado['pdf_bytes'] = pdf_bytes
+                    
+                    mostrar_resultados(resultado)
+                else:
+                    st.error(f"❌ Error en el análisis: {resultado['error']}")
+            
+            elif modulo == "📊 Carta Natal Completa":
+                # Usar el nuevo análisis de carta natal MEJORADO
+                carta_natal = CartaNatalIntegrada()
+                resultado = carta_natal.generar_carta_natal_completa(
+                    fecha_nacimiento, hora_local, zona_horaria,
+                    consultante_nombre, latitud_gms, longitud_gms
+                )
+                
+                if resultado['success']:
+                    mostrar_carta_natal_mejorada(resultado)
+                else:
+                    st.error(f"❌ Error en la carta natal: {resultado['error']}")
+            
+            else:  # Análisis integral
+                # Ejecutar ambos análisis
+                analizador_web = AnalisisAstrologicoWeb()
+                carta_natal = CartaNatalIntegrada()
+                
+                resultado_base = analizador_web.realizar_analisis_completo(
+                    fecha_nacimiento, hora_local, zona_horaria,
+                    consultante_nombre, latitud_gms, longitud_gms
+                )
+                
+                if resultado_base['success']:
+                    resultado_carta = carta_natal.generar_carta_natal_completa(
+                        fecha_nacimiento, hora_local, zona_horaria,
+                        consultante_nombre, latitud_gms, longitud_gms
+                    )
+                    
+                    if resultado_carta['success']:
+                        mostrar_analisis_integral(resultado_base, resultado_carta)
+                    else:
+                        st.error(f"❌ Error en carta natal: {resultado_carta['error']}")
+                else:
+                    st.error(f"❌ Error en análisis base: {resultado_base['error']}")
+
+# ============================= EJECUCIÓN PRINCIPAL =============================
 if __name__ == "__main__":
     main_ampliada()
