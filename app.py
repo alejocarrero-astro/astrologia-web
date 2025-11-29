@@ -14,6 +14,13 @@ import io
 import pytz
 import numpy as np
 
+# ============================= CONFIGURACIÓN DE PÁGINA =============================
+st.set_page_config(
+    page_title="Astrología Integral - Hyleg & Carta Natal",
+    page_icon="♋",
+    layout="wide"
+)
+
 # ----------------------------- FUNCIONES DE CONVERSIÓN COORDENADAS -----------------------------
 def gms_a_gd(grados, minutos, segundos, direccion):
     gd = grados + minutos/60.0 + segundos/3600.0
@@ -1410,13 +1417,7 @@ def mostrar_analisis_integral(resultado_base, resultado_carta):
 
 def main_ampliada():
     """Versión ampliada del main para incluir carta natal usando solo pyswisseph"""
-    
-    st.set_page_config(
-        page_title="Astrología Integral - Hyleg & Carta Natal",
-        page_icon="♋",
-        layout="wide"
-    )
-    
+
     st.title("♋ Astrología Integral - Hyleg & Carta Natal")
     st.markdown("---")
     
@@ -1653,224 +1654,6 @@ def mostrar_resultados(resultado):
         """)
 
 # ============================= LLAMADO FINAL ACTUALIZADO =============================
-if __name__ == "__main__":
-    main_ampliada()
 
-
-# ----------------------------- CLASE VISUAL (GRÁFICO ROTADO AVANZADO) -----------------------------
-class CartaNatalIntegradaVisual:
-    """Clase responsable del gráfico rotado avanzado (mantener ASC en eje horizontal a 180°)"""
-    def __init__(self):
-        pass
-
-    def generar_grafico_carta_natal_completo(self, carta_data, consultante_nombre):
-        try:
-            asc_longitud = carta_data.get('ascendente', {}).get('longitud', 0)
-            ajuste_rotacion = (180 - asc_longitud) % 360
-            carta_data_rotada = self._rotar_carta_data(carta_data, ajuste_rotacion)
-            fig, ax = plt.subplots(figsize=(14, 14))
-            ax.set_xlim(-1.3, 1.3); ax.set_ylim(-1.3, 1.3); ax.set_aspect('equal'); ax.axis('off')
-            self._dibujar_circulos_concentricos(ax)
-            self._dibujar_casas(ax, carta_data_rotada)
-            self._dibujar_signos_zodiaco(ax)
-            posiciones_planetas = self._dibujar_planetas(ax, carta_data_rotada)
-            self._dibujar_aspectos(ax, posiciones_planetas, carta_data_rotada)
-            self._dibujar_puntos_importantes_rotados(ax, carta_data_rotada)
-            self._agregar_titulo_leyenda(ax, consultante_nombre)
-            plt.tight_layout()
-            return fig
-        except Exception as e:
-            st.error(f"Error al generar gráfico completo de carta natal (visual): {e}")
-            return None
-
-    def _rotar_carta_data(self, carta_data, ajuste_rotacion):
-        carta_rotada = {}
-        for planeta, info in carta_data.items():
-            if planeta not in ['ascendente', 'parte_fortuna', 'casas', 'aspectos']:
-                carta_rotada[planeta] = info.copy()
-                carta_rotada[planeta]['longitud'] = (info['longitud'] + ajuste_rotacion) % 360
-        asc = carta_data.get('ascendente', {})
-        if asc:
-            carta_rotada['ascendente'] = asc.copy()
-            carta_rotada['ascendente']['longitud'] = 180.0
-        fortuna = carta_data.get('parte_fortuna', {})
-        if fortuna:
-            carta_rotada['parte_fortuna'] = fortuna.copy()
-            carta_rotada['parte_fortuna']['longitud'] = (fortuna['longitud'] + ajuste_rotacion) % 360
-        casas_originales = carta_data.get('casas', {})
-        carta_rotada['casas'] = {}
-        for casa_num, info_casa in casas_originales.items():
-            cuspide_rotada = (info_casa['cuspide'] + ajuste_rotacion) % 360
-            carta_rotada['casas'][casa_num] = {'cuspide': cuspide_rotada, 'signo': info_casa.get('signo','')}
-        carta_rotada['aspectos'] = carta_data.get('aspectos', [])
-        return carta_rotada
-
-    def _dibujar_circulos_concentricos(self, ax):
-        ax.add_patch(plt.Circle((0, 0), 1.0, fill=False, edgecolor='black', linewidth=3))
-        for radius in [0.8, 0.6, 0.4, 0.2]:
-            ax.add_patch(plt.Circle((0, 0), radius, fill=False, edgecolor='gray', linewidth=1, alpha=0.5, linestyle='--'))
-
-    def _dibujar_casas(self, ax, carta_data):
-        casas = carta_data.get('casas', {})
-        for casa_num, info_casa in casas.items():
-            cusp = info_casa.get('cuspide', 0)
-            ang = np.radians(cusp)
-            x_end = np.cos(ang); y_end = np.sin(ang)
-            ax.plot([0, x_end], [0, y_end], 'r-', linewidth=1.5, alpha=0.7)
-            label_radius = 1.08
-            ax.text(label_radius*np.cos(ang), label_radius*np.sin(ang), f'{casa_num}', ha='center', va='center', fontsize=10, fontweight='bold', color='red', bbox=dict(boxstyle='circle,pad=0.2', facecolor='white', alpha=0.8, edgecolor='red'))
-            # sombreado suave
-            # compute next cuspide
-            if casa_num < 12:
-                next_casa = casas.get(casa_num + 1, {})
-                next_cuspide = next_casa.get('cuspide', cusp + 30)
-            else:
-                next_cuspide = casas.get(1, {}).get('cuspide', cusp + 30)
-            start_angle = cusp
-            end_angle = next_cuspide if next_cuspide > cusp else next_cuspide + 360
-            theta = np.linspace(np.radians(start_angle), np.radians(end_angle), 100)
-            x_arc = 0.9 * np.cos(theta); y_arc = 0.9 * np.sin(theta)
-            ax.fill_between(x_arc, y_arc, alpha=0.05, color='blue')
-
-    def _dibujar_signos_zodiaco(self, ax):
-        signos = ['Aries','Tauro','Géminis','Cáncer','Leo','Virgo','Libra','Escorpio','Sagitario','Capricornio','Acuario','Piscis']
-        colores = ['#FF6B6B','#4ECDC4','#45B7D1','#96CEB4','#FFEAA7','#DDA0DD','#98D8C8','#F7DC6F','#BB8FCE','#85C1E9','#F8C471','#82E0AA']
-        for i, signo in enumerate(signos):
-            ang = np.radians(i*30)
-            ax.plot([0.4*np.cos(ang), 1.0*np.cos(ang)], [0.4*np.sin(ang), 1.0*np.sin(ang)], 'k-', linewidth=1, alpha=0.3)
-            tx = 1.18*np.cos(ang+np.radians(15)); ty = 1.18*np.sin(ang+np.radians(15))
-            ax.text(tx, ty, signo, ha='center', va='center', fontsize=9, fontweight='bold', rotation=i*30, bbox=dict(boxstyle='round,pad=0.3', facecolor=colores[i], alpha=0.8, edgecolor='black'))
-
-    def _dibujar_planetas(self, ax, carta_data):
-        posiciones = {}
-        radio_planetas = 0.75
-        for planeta, info in carta_data.items():
-            if planeta in ['ascendente','parte_fortuna','casas','aspectos']:
-                continue
-            try:
-                longitud = info.get('longitud', 0)
-                angulo = np.radians(longitud)
-                x = radio_planetas * np.cos(angulo); y = radio_planetas * np.sin(angulo)
-                posiciones[planeta] = (x, y, longitud)
-                color = self._get_planet_color(planeta)
-                ax.plot(x, y, 'o', markersize=14, color=color, markeredgecolor='black', markeredgewidth=2, zorder=5)
-                ax.text(x, y - 0.12, planeta, ha='center', va='top', fontsize=8, fontweight='bold', bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.9, edgecolor=color))
-                info_text = f"{info.get('signo','')} ({info.get('casa','')})"
-                ax.text(x, y - 0.12 - 0.05, info_text, ha='center', va='top', fontsize=6, bbox=dict(boxstyle='round,pad=0.1', facecolor='lightyellow', alpha=0.7))
-            except Exception as e:
-                print(f"Error dibujando planeta {planeta}: {e}")
-        return posiciones
-
-    def _dibujar_aspectos(self, ax, posiciones_planetas, carta_data):
-        aspectos = carta_data.get('aspectos', [])
-        for aspecto in aspectos:
-            p1 = aspecto.get('planeta1'); p2 = aspecto.get('planeta2')
-            if p1 not in posiciones_planetas or p2 not in posiciones_planetas: continue
-            x1,y1,_ = posiciones_planetas[p1]; x2,y2,_ = posiciones_planetas[p2]
-            color, estilo, grosor = self._get_aspect_style(aspecto.get('aspecto'))
-            ax.plot([x1, x2], [y1, y2], color=color, linestyle=estilo, linewidth=grosor, alpha=0.7, zorder=1)
-            mid_x = (x1+x2)/2; mid_y = (y1+y2)/2
-            ax.text(mid_x, mid_y, aspecto.get('aspecto','')[:3], ha='center', va='center', fontsize=6, fontweight='bold', bbox=dict(boxstyle='round,pad=0.1', facecolor=color, alpha=0.3))
-
-    def _dibujar_puntos_importantes_rotados(self, ax, carta_data_rotada):
-        asc = carta_data_rotada.get('ascendente', {})
-        if asc:
-            self._dibujar_punto_especial(ax, asc['longitud'], 'ASC', 'green', 0.85)
-        fortuna = carta_data_rotada.get('parte_fortuna', {})
-        if fortuna:
-            self._dibujar_punto_especial(ax, fortuna['longitud'], 'FORT', 'purple', 0.65)
-        casas = carta_data_rotada.get('casas', {})
-        if 10 in casas:
-            self._dibujar_punto_especial(ax, casas[10]['cuspide'], 'MC', 'blue', 0.85)
-
-    def _dibujar_punto_especial(self, ax, longitud, etiqueta, color, radio):
-        ang = np.radians(longitud); x = radio*np.cos(ang); y = radio*np.sin(ang)
-        ax.plot(x, y, 's', markersize=10, color=color, markeredgecolor='black', markeredgewidth=1.5, zorder=6)
-        ax.text(x, y + 0.08, etiqueta, ha='center', va='bottom', fontsize=8, fontweight='bold', color=color, bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.9))
-
-    def _get_planet_color(self, planeta):
-        colors = {'Sun':'#FFD700','Moon':'#C0C0C0','Mercury':'#87CEEB','Venus':'#FFB6C1','Mars':'#FF4500','Jupiter':'#FFA500','Saturn':'#A9A9A9','Uranus':'#40E0D0','Neptune':'#1E90FF','Pluto':'#8B008B'}
-        return colors.get(planeta, '#333333')
-
-    def _get_aspect_style(self, aspecto):
-        aspectos_config = {'Conjunction':('#FFD700','-',2.0),'Opposition':('#FF4500','-',2.0),'Square':('#FF0000','--',1.5),'Trine':('#00FF00','-',1.5),'Sextile':('#0000FF',':',1.0)}
-        return aspectos_config.get(aspecto, ('#666666','--',1.0))
-
-    def _agregar_titulo_leyenda(self, ax, consultante_nombre):
-        ax.set_title(f'CARTA NATAL COMPLETA\\n{consultante_nombre}\\n', fontsize=18, fontweight='bold', pad=20)
-        leyenda_x = -1.25; leyenda_y = 1.2
-        aspectos_leyenda = [('Conjunction','Conjunción','#FFD700'),('Opposition','Oposición','#FF4500'),('Square','Cuadratura','#FF0000'),('Trine','Trino','#00FF00'),('Sextile','Sextil','#0000FF')]
-        for i,(aspecto,nombre,color) in enumerate(aspectos_leyenda):
-            y_pos = leyenda_y - i*0.05
-            ax.plot([leyenda_x, leyenda_x+0.05],[y_pos,y_pos], color=color, linewidth=2)
-            ax.text(leyenda_x+0.07, y_pos, nombre, ha='left', va='center', fontsize=8)
-
-# ----------------------------- WRAPPER DE PDF PARA USAR EL GRÁFICO ROTADO -----------------------------
-def _generar_pdf_con_carta_visual(self, resultado, events, consultante_nombre, carta_data=None):
-    try:
-        buffer = io.BytesIO()
-        styles = getSampleStyleSheet()
-        if "CustomTitle" not in styles:
-            styles.add(ParagraphStyle(name="CustomTitle", fontSize=18, leading=22, alignment=1))
-        styles.add(ParagraphStyle(name="Body", fontSize=10, leading=14, alignment=4))
-        styles.add(ParagraphStyle(name="BodyBold", parent=styles["Body"], fontName="Helvetica-Bold"))
-        styles.add(ParagraphStyle(name="Center", parent=styles["Body"], alignment=1))
-        styles.add(ParagraphStyle(name="Small", parent=styles["Body"], fontSize=8, leading=10))
-
-        doc = SimpleDocTemplate(buffer, pagesize=letter)
-        story = []
-
-        story.append(Paragraph(f"Análisis Astrológico Completo - {consultante_nombre}", styles["CustomTitle"]))
-        story.append(Spacer(1,12))
-
-        # Información básica (mantener formato original)
-        story.append(Paragraph("<b>INFORMACIÓN DEL NACIMIENTO:</b>", styles["BodyBold"]))
-        story.append(Spacer(1,6))
-
-        info_lines = [
-            f"<b>Consultante:</b> {consultante_nombre}",
-            f"<b>Fecha:</b> {resultado.get('fecha_nacimiento','')}",
-            f"<b>Hora local:</b> {resultado.get('hora_local','')}",
-            f"<b>Zona horaria:</b> UTC{resultado.get('zona_horaria',0):+.1f}",
-        ]
-        for line in info_lines:
-            story.append(Paragraph(line, styles["Body"]))
-        story.append(Spacer(1,12))
-
-        # Insertar gráfico visual rotado si hay carta_data
-        if carta_data is not None:
-            try:
-                generator = CartaNatalIntegradaVisual()
-                fig = generator.generar_grafico_carta_natal_completo(carta_data, consultante_nombre)
-            except Exception:
-                fig = None
-            if fig is not None:
-                img_buffer = io.BytesIO()
-                fig.savefig(img_buffer, format='PNG', dpi=150, bbox_inches='tight')
-                img_buffer.seek(0)
-                story.append(Image(img_buffer, width=400, height=300))
-                story.append(Spacer(1,12))
-
-        # Continuar añadiendo tablas e interpretaciones (se mantiene la estructura original simple)
-        story.append(Paragraph("<b>INFORMACIÓN SUMARIA:</b>", styles["BodyBold"]))
-        story.append(Spacer(1,6))
-        story.append(Paragraph("Informe generado por sistema.", styles["Body"]))
-
-        doc.build(story)
-        pdf_bytes = buffer.getvalue()
-        buffer.close()
-        return pdf_bytes
-        
-    except Exception as e:
-        st.error(f"Error generando PDF con carta visual: {e}")
-        return None
-
-# Monkeypatch: si AnalisisAstrologicoWeb existe, reemplazar su método generar_pdf_completo por el wrapper seguro
-try:
-    AnalisisAstrologicoWeb.generar_pdf_completo = _generar_pdf_con_carta_visual
-except Exception:
-    pass
-
-# ============================= LLAMADO FINAL ACTUALIZADO =============================
 if __name__ == "__main__":
     main_ampliada()
