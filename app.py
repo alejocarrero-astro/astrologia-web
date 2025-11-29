@@ -1299,7 +1299,8 @@ def mostrar_carta_natal(resultado):
                 data=resultado['pdf_bytes'],
                 file_name=f"carta_natal_{resultado['analisis_base']['consultante_nombre']}.pdf",
                 mime="application/pdf",
-                use_container_width=True
+                use_container_width=True,
+                key="pdf_carta_natal"
             )
             st.info("✅ PDF incluye: Gráfico de carta natal, información completa, tablas detalladas")
         else:
@@ -1317,7 +1318,8 @@ def mostrar_carta_natal(resultado):
                 data=csv_content,
                 file_name=f"eventos_astrologicos_{resultado['analisis_base']['consultante_nombre']}.csv",
                 mime="text/csv",
-                use_container_width=True
+                use_container_width=True,
+                key="csv_carta_natal"
             )
             st.info("✅ CSV incluye: Todos los eventos astrológicos con años, fechas y precisiones")
         else:
@@ -1475,7 +1477,7 @@ def main_ampliada():
     else:
         analizar_text = "🌌 Ejecutar Análisis Integral Completo"
     
-    if st.button(analizar_text, type="primary", use_container_width=True):
+    if st.button(analizar_text, type="primary", use_container_width=True, key="analisis_principal"):
         with st.spinner("Realizando cálculos astrológicos... Esto puede tomar unos segundos."):
             latitud_gms = (lat_grados, lat_minutos, lat_segundos, lat_direccion)
             longitud_gms = (lon_grados, lon_minutos, lon_segundos, lon_direccion)
@@ -1614,7 +1616,8 @@ def mostrar_resultados(resultado):
                 data=resultado['pdf_bytes'],
                 file_name=f"analisis_astrologico_{resultado['consultante_nombre']}.pdf",
                 mime="application/pdf",
-                use_container_width=True
+                use_container_width=True,
+                key="pdf_resultados"
             )
             st.info("✅ PDF incluye: Información completa, tablas detalladas, eventos hasta 100 años, interpretación por bienios")
         else:
@@ -1629,7 +1632,8 @@ def mostrar_resultados(resultado):
                 data=csv_content,
                 file_name=f"eventos_astrologicos_{resultado['consultante_nombre']}.csv",
                 mime="text/csv",
-                use_container_width=True
+                use_container_width=True,
+                key="csv_resultados"
             )
             st.info("✅ CSV incluye: Todos los eventos astrológicos con años, fechas y precisiones")
         else:
